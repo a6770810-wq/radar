@@ -1,0 +1,9 @@
+{
+  "name": "signal-radar-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "רדאר איתותים — בוט טלגרם לקריפטו וזהב",
+  "main": "bot.js",
+  "scripts": { "start": "node bot.js --loop", "once": "node bot.js" },
+  "engines": { "node": ">=18" }
+}

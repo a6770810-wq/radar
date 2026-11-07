@@ -1,0 +1,38 @@
+name: Signal Radar
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: radar
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Scan and send signals
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: node bot.js
+      - name: Save state
+        run: |
+          if ! git diff --quiet state.json; then
+            git config user.name "radar-bot"
+            git config user.email "radar-bot@users.noreply.github.com"
+            git add state.json
+            git commit -m "radar state" -q
+            git pull --rebase -q || true
+            git push -q
+          fi

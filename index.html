@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>רדאר איתותים</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&family=Assistant:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: one column trading desk — the live signal first, then the chart, the reasoning, and the proof (backtest). */
+:root{
+  --bg:#0d121b; --surface:#141b28; --raise:#1b2434; --line:#253045;
+  --fg:#e8ebf2; --muted:#8c95aa; --gold:#d8ab4f; --gold-soft:rgba(216,171,79,.14);
+  --long:#3fc290; --long-soft:rgba(63,194,144,.14); --short:#ef5d70; --short-soft:rgba(239,93,112,.14); --warn:#e3a23b;
+  --f-display:"Rubik",system-ui,sans-serif; --f-body:"Assistant",system-ui,sans-serif; --f-num:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--f-body);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px;display:grid;gap:16px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance}
+h1{font-size:1.45rem;font-weight:800;letter-spacing:-.01em}
+h2{font-size:1.05rem;font-weight:700}
+.muted{color:var(--muted)}
+.small{font-size:.82rem}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:30px;height:30px;border-radius:50%;border:2px solid var(--gold);position:relative;flex:none}
+.mark::after{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--gold);opacity:.85}
+@media (prefers-reduced-motion:no-preference){.mark.live::after{animation:ping 2.4s ease-out infinite}}
+@keyframes ping{0%{transform:scale(.6);opacity:.95}100%{transform:scale(1.6);opacity:0}}
+.status{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.ok{background:var(--long)} .dot.bad{background:var(--short)}
+.btn{border:1px solid var(--line);background:var(--raise);border-radius:8px;padding:7px 12px;font-weight:600}
+.btn:hover{border-color:var(--gold)}
+.btn.gold{background:var(--gold);color:#1a1405;border-color:var(--gold)}
+
+.assets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.asset{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 10px;text-align:start;display:grid;gap:2px;min-width:0}
+.asset[aria-pressed="true"]{border-color:var(--gold);background:linear-gradient(var(--gold-soft),var(--gold-soft)),var(--surface)}
+.asset .k{font-family:var(--f-display);font-weight:700;display:flex;justify-content:space-between;gap:6px}
+.asset .p{font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asset .sc{font-size:.8rem;font-weight:600}
+.flag{width:7px;height:7px;border-radius:50%;display:inline-block;align-self:center}
+@media (max-width:520px){.assets{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.tfs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px;width:max-content;max-width:100%}
+.tfs button{border:0;background:transparent;border-radius:7px;padding:6px 12px;color:var(--muted);font-weight:600}
+.tfs button[aria-pressed="true"]{background:var(--raise);color:var(--fg)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:14px;min-width:0}
+
+/* Signal hero */
+.hero{position:relative;overflow:hidden}
+.hero[data-dir="1"]{border-color:rgba(63,194,144,.5)}
+.hero[data-dir="-1"]{border-color:rgba(239,93,112,.5)}
+.verdict{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.verdict .big{font-family:var(--f-display);font-size:2.4rem;font-weight:800;line-height:1}
+.verdict .big.l{color:var(--long)} .verdict .big.s{color:var(--short)} .verdict .big.w{color:var(--muted)}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{border-radius:999px;padding:2px 10px;font-size:.78rem;font-weight:700;border:1px solid var(--line);background:var(--raise);letter-spacing:.02em}
+.pill.l{color:var(--long);border-color:rgba(63,194,144,.4);background:var(--long-soft)}
+.pill.s{color:var(--short);border-color:rgba(239,93,112,.4);background:var(--short-soft)}
+.pill.w{color:var(--warn);border-color:rgba(227,162,59,.4)}
+.pill.new{background:var(--gold);color:#1a1405;border-color:var(--gold)}
+.levels{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.lv{background:var(--raise);border-radius:10px;padding:8px 10px;display:grid;gap:2px;min-width:0}
+.lv .t{font-size:.72rem;color:var(--muted);letter-spacing:.04em}
+.lv .v{font-weight:600;font-size:.95rem;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:520px){.levels{grid-template-columns:repeat(2,minmax(0,1fr))}.verdict .big{font-size:2rem}}
+
+.gauge{direction:ltr;position:relative;height:30px}
+.gauge .track{position:absolute;inset:11px 0;border-radius:4px;background:linear-gradient(90deg,var(--short-soft),transparent 45%,transparent 55%,var(--long-soft));border:1px solid var(--line)}
+.gauge .th{position:absolute;top:6px;bottom:6px;width:2px;background:var(--muted);opacity:.6}
+.gauge .mid{position:absolute;top:8px;bottom:8px;left:50%;width:1px;background:var(--line)}
+.gauge .needle{position:absolute;top:2px;width:4px;height:26px;border-radius:2px;margin-left:-2px;background:var(--gold);transition:left .5s}
+.gauge-lbl{direction:ltr;display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted)}
+.prob{background:var(--raise);border-radius:10px;padding:10px 12px;font-size:.9rem}
+
+.chartbox{direction:ltr;position:relative;width:100%;height:320px;border-radius:10px;overflow:hidden;background:var(--bg);border:1px solid var(--line)}
+.chartbox canvas{width:100%;height:100%;display:block}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-inline-end:5px}
+
+.parts{display:grid;gap:8px}
+.part{display:grid;grid-template-columns:minmax(0,9.5rem) minmax(0,1fr) 3.2rem;gap:10px;align-items:center}
+.part .nm{font-weight:600;font-size:.88rem}
+.part .nt{grid-column:1/-1;font-size:.78rem;color:var(--muted);margin-top:-6px}
+.pbar{direction:ltr;position:relative;height:8px;background:var(--raise);border-radius:4px}
+.pbar::before{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line)}
+.pbar span{position:absolute;top:0;bottom:0;border-radius:4px}
+.part .pv{text-align:left;font-size:.82rem}
+
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tile{background:var(--raise);border-radius:10px;padding:10px 12px;display:grid;gap:2px}
+.tile .t{font-size:.74rem;color:var(--muted)}
+.tile .v{font-family:var(--f-num);font-size:1.15rem;font-weight:600;direction:ltr;text-align:right}
+@media (max-width:520px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.eqbox{direction:ltr;height:150px;border-radius:10px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
+.eqbox canvas{width:100%;height:100%;display:block}
+
+.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:620px){.controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ctl{display:grid;gap:4px;font-size:.82rem;color:var(--muted)}
+.ctl select,.ctl input[type=number]{background:var(--raise);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%}
+.ctl input[type=range]{width:100%;accent-color:var(--gold)}
+.chk{display:flex;gap:8px;align-items:center;font-size:.85rem}
+.chk input{accent-color:var(--gold);width:16px;height:16px}
+.opt{background:var(--raise);border-radius:10px;padding:10px 12px;font-size:.88rem;display:grid;gap:6px}
+.opt table{width:100%;border-collapse:collapse;font-size:.84rem}
+.opt td,.opt th{padding:4px 6px;text-align:start;border-bottom:1px solid var(--line)}
+.opt th{color:var(--muted);font-weight:600}
+
+.list{display:grid;gap:0}
+.li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:.86rem}
+.li:last-child{border-bottom:0}
+.empty{color:var(--muted);font-size:.88rem;padding:6px 0}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:760px){.two{grid-template-columns:minmax(0,1fr)}}
+.note{font-size:.8rem;color:var(--muted);line-height:1.6}
+.err{border:1px solid rgba(239,93,112,.5);background:var(--short-soft);border-radius:12px;padding:12px 14px;font-size:.9rem}
+.toast{position:fixed;inset-inline:max(16px,env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:420px;margin-inline:auto;background:var(--gold);color:#1a1405;font-weight:700;border-radius:12px;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.45);z-index:20}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="brand">
+    <div class="mark" id="mark"></div>
+    <div>
+      <h1>רדאר איתותים</h1>
+      <div class="small muted">קריפטו וזהב · טווח קצר · נתוני Binance חיים</div>
+    </div>
+  </div>
+  <div class="row" style="gap:10px">
+    <div class="status"><span class="dot" id="dot"></span><span id="stat">מתחבר…</span></div>
+    <button class="btn" id="notifyBtn" type="button">הפעל התראות</button>
+  </div>
+</header>
+
+<div class="assets" id="assets"></div>
+<div class="row">
+  <div class="tfs" id="tfs" role="group" aria-label="טווח זמן"></div>
+  <div class="small muted" id="htfLbl"></div>
+</div>
+
+<div id="errBox" hidden class="err"></div>
+
+<section class="panel hero" id="hero" data-dir="0">
+  <div class="row" style="align-items:flex-start">
+    <div class="verdict"><span class="big w" id="vBig">—</span><span class="muted" id="vSub">טוען נתונים…</span></div>
+    <div class="pills" id="pills"></div>
+  </div>
+  <div class="levels" id="levels"></div>
+  <div>
+    <div class="gauge" id="gauge"><div class="track"></div><div class="mid"></div><div class="th" id="thL"></div><div class="th" id="thR"></div><div class="needle" id="needle" style="left:50%"></div></div>
+    <div class="gauge-lbl"><span>שורט ‎-100</span><span id="scoreNow" class="num">ציון 0</span><span>לונג ‎+100</span></div>
+  </div>
+  <div class="prob" id="prob">—</div>
+</section>
+
+<section class="panel">
+  <div class="row"><h2>גרף</h2>
+    <div class="legend"><span><i style="background:var(--gold)"></i>EMA 21</span><span><i style="background:#6d8fd6"></i>EMA 50</span><span><i style="background:rgba(140,149,170,.5)"></i>בולינגר</span><span>▲▼ איתותים בהיסטוריה</span></div>
+  </div>
+  <div class="chartbox"><canvas id="chart"></canvas></div>
+  <div class="note">האיתות מחושב רק על נר סגור. הנר הנוכחי מוצג אבל לא משנה איתות עד שייסגר, כדי שהאיתות לא "יצוץ ויעלם".</div>
+</section>
+
+<section class="panel">
+  <h2>למה זה הציון</h2>
+  <div class="parts" id="parts"></div>
+  <div class="note" id="regimeNote"></div>
+</section>
+
+<section class="panel">
+  <div class="row"><h2>הוכחה: בדיקה לאחור על ההיסטוריה</h2><span class="small muted" id="btRange"></span></div>
+  <div class="tiles" id="tiles"></div>
+  <div class="eqbox"><canvas id="eq"></canvas></div>
+  <div class="note">R הוא הסכום שסיכנת בעסקה. ‎+2R פירושו רווח של פי 2 מהסיכון. התוצאות כוללות עמלות, מניחות כניסה בפתיחת הנר הבא, ואם סטופ ויעד נגעו באותו נר נספר הפסד (התרחיש הגרוע).</div>
+
+  <div class="controls">
+    <label class="ctl" for="th">סף ציון לאיתות: <b class="num" id="thV"></b><input type="range" id="th" min="30" max="85" step="5"></label>
+    <label class="ctl" for="sl">סטופ (כפולות ATR)<select id="sl"><option>1</option><option>1.5</option><option>2</option><option>2.5</option></select></label>
+    <label class="ctl" for="rr">יחס רווח/סיכון<select id="rr"><option>1</option><option>1.5</option><option>2</option><option>3</option></select></label>
+    <label class="ctl" for="mb">יציאת זמן (נרות)<input type="number" id="mb" min="5" max="200" step="5"></label>
+    <label class="ctl" for="fee">עמלה לכיוון (%)<input type="number" id="fee" min="0" max="1" step="0.01"></label>
+    <label class="chk" for="htf"><input type="checkbox" id="htf">חובה אישור מגמה בטווח גבוה</label>
+  </div>
+  <div class="row">
+    <button class="btn gold" id="optBtn" type="button">מצא פרמטרים טובים לנכס הזה</button>
+    <button class="btn" id="resetBtn" type="button">ברירת מחדל</button>
+  </div>
+  <div class="opt" id="optBox" hidden></div>
+</section>
+
+<div class="two">
+  <section class="panel">
+    <h2>עסקאות אחרונות בבדיקה</h2>
+    <div class="list" id="trades"></div>
+  </section>
+  <section class="panel">
+    <div class="row"><h2>יומן התראות חי</h2><button class="btn small" id="clearLog" type="button">נקה</button></div>
+    <div class="list" id="log"></div>
+  </section>
+</div>
+
+<p class="note">כלי לניתוח טכני ולמחקר בלבד, לא ייעוץ השקעות. אין מערכת איתותים עם 100% הצלחה, ותוצאות עבר לא מבטיחות תוצאות עתידיות. סחור רק בסכום שאתה מוכן להפסיד, והימנע מאיתותים סביב פרסומי מאקרו (CPI, ריבית, NFP), במיוחד בזהב.</p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+/* ============ Config ============ */
+const HOSTS=["https://data-api.binance.vision","https://api.binance.com"];
+const ASSETS=[
+  {s:"BTCUSDT",k:"BTC",n:"ביטקוין"},
+  {s:"ETHUSDT",k:"ETH",n:"את'ריום"},
+  {s:"SOLUSDT",k:"SOL",n:"סולנה"},
+  {s:"PAXGUSDT",k:"זהב",n:"PAXG"}
+];
+const TF={"1m":{ms:6e4,htf:"15m",l:"1 דק׳"},"5m":{ms:3e5,htf:"1h",l:"5 דק׳"},"15m":{ms:9e5,htf:"1h",l:"15 דק׳"},"1h":{ms:36e5,htf:"4h",l:"שעה"}};
+const HTF_MS={"15m":9e5,"1h":36e5,"4h":144e5};
+const HTF_LBL={"15m":"15 דק׳","1h":"שעה","4h":"4 שעות"};
+const DEF={th:55,sl:1.5,rr:2,mb:40,fee:0.1,htf:true};
+const START=210, LIMIT=1000;
+const W={trend:20,htf:20,macd:15,rsi:15,vwap:10,vol:10,sqz:10};
+
+const S={sym:"BTCUSDT",tf:"5m",P:{...DEF},cache:{},D:null,bt:null,tick:0,notify:false,audio:null};
+
+/* ============ Storage (per-viewer convenience) ============ */
+const store={get(k,d){try{const v=localStorage.getItem("radar."+k);return v==null?d:JSON.parse(v)}catch(e){return d}},
+  set(k,v){try{localStorage.setItem("radar."+k,JSON.stringify(v))}catch(e){}}};
+
+/* ============ Math ============ */
+const clip=(x,a=-1,b=1)=>Math.max(a,Math.min(b,x));
+function smoothed(src,p,alphaFn){const out=new Array(src.length).fill(NaN);let prev=NaN,cnt=0,sum=0;const a=alphaFn(p);
+  for(let i=0;i<src.length;i++){const v=src[i];if(!Number.isFinite(v))continue;
+    if(!Number.isFinite(prev)){sum+=v;cnt++;if(cnt===p){prev=sum/p;out[i]=prev}}else{prev=v*a+prev*(1-a);out[i]=prev}}return out}
+const ema=(s,p)=>smoothed(s,p,p=>2/(p+1));
+const rma=(s,p)=>smoothed(s,p,p=>1/p);
+function sma(s,p){const o=new Array(s.length).fill(NaN);let sum=0;for(let i=0;i<s.length;i++){sum+=s[i];if(i>=p)sum-=s[i-p];if(i>=p-1)o[i]=sum/p}return o}
+function stdev(s,p,m){const o=new Array(s.length).fill(NaN);for(let i=p-1;i<s.length;i++){let q=0;for(let j=i-p+1;j<=i;j++)q+=(s[j]-m[i])**2;o[i]=Math.sqrt(q/p)}return o}
+function rsi(c,p=14){const o=new Array(c.length).fill(NaN);let g=0,l=0;
+  for(let i=1;i<c.length;i++){const d=c[i]-c[i-1],up=Math.max(d,0),dn=Math.max(-d,0);
+    if(i<=p){g+=up;l+=dn;if(i===p){g/=p;l/=p;o[i]=100-100/(1+g/(l||1e-12))}}
+    else{g=(g*(p-1)+up)/p;l=(l*(p-1)+dn)/p;o[i]=100-100/(1+g/(l||1e-12))}}return o}
+function pctRank(a,i,len){if(i<len||!Number.isFinite(a[i]))return NaN;let k=0,n=0;for(let j=i-len;j<i;j++){if(Number.isFinite(a[j])){n++;if(a[j]<a[i])k++}}return n?k/n:NaN}
+
+/* ============ Data ============ */
+async function fetchK(sym,tf,limit){let err;
+  for(const h of HOSTS){try{const r=await fetch(`${h}/api/v3/klines?symbol=${sym}&interval=${tf}&limit=${limit}`,{cache:"no-store"});
+      if(!r.ok)throw new Error("HTTP "+r.status);const j=await r.json();
+      return j.map(a=>({t:a[0],o:+a[1],h:+a[2],l:+a[3],c:+a[4],v:+a[5]}))}catch(e){err=e}}
+  throw err}
+function merge(arr,neu){for(const b of neu){const last=arr[arr.length-1];
+    if(!last||b.t>last.t)arr.push(b);else{for(let i=arr.length-1;i>=Math.max(0,arr.length-5);i--){if(arr[i].t===b.t){arr[i]=b;break}}}}
+  if(arr.length>LIMIT)arr.splice(0,arr.length-LIMIT);return arr}
+async function loadAsset(sym,tf,full){const key=sym+"|"+tf;let c=S.cache[key];const htf=TF[tf].htf;
+  if(!c||full){const [l,h]=await Promise.all([fetchK(sym,tf,LIMIT),fetchK(sym,htf,LIMIT)]);c={l,h,ht:Date.now()};S.cache[key]=c}
+  else{const jobs=[fetchK(sym,tf,3)];const needH=Date.now()-c.ht>60e3;if(needH)jobs.push(fetchK(sym,htf,3));
+    const r=await Promise.all(jobs);merge(c.l,r[0]);if(needH){merge(c.h,r[1]);c.ht=Date.now()}}
+  return c}
+
+/* ============ Indicators + scoring ============ */
+function build(c,tf){const L=c.l,n=L.length;const t=L.map(b=>b.t),o=L.map(b=>b.o),h=L.map(b=>b.h),l=L.map(b=>b.l),cl=L.map(b=>b.c),v=L.map(b=>b.v);
+  const D={n,t,o,h,l,c:cl,v,tf};
+  D.e21=ema(cl,21);D.e50=ema(cl,50);D.e200=ema(cl,200);
+  const e12=ema(cl,12),e26=ema(cl,26);D.macd=cl.map((_,i)=>e12[i]-e26[i]);D.sig=ema(D.macd,9);D.hist=D.macd.map((m,i)=>m-D.sig[i]);
+  D.rsi=rsi(cl,14);
+  const tr=cl.map((_,i)=>i===0?h[0]-l[0]:Math.max(h[i]-l[i],Math.abs(h[i]-cl[i-1]),Math.abs(l[i]-cl[i-1])));
+  D.atr=rma(tr,14);
+  const pdm=cl.map((_,i)=>{if(!i)return 0;const up=h[i]-h[i-1],dn=l[i-1]-l[i];return up>dn&&up>0?up:0});
+  const mdm=cl.map((_,i)=>{if(!i)return 0;const up=h[i]-h[i-1],dn=l[i-1]-l[i];return dn>up&&dn>0?dn:0});
+  const sp=rma(pdm,14),sm=rma(mdm,14);
+  const dx=cl.map((_,i)=>{const a=D.atr[i];if(!(a>0))return NaN;const pi=100*sp[i]/a,mi=100*sm[i]/a;return pi+mi>0?100*Math.abs(pi-mi)/(pi+mi):0});
+  D.adx=rma(dx,14);
+  D.bbM=sma(cl,20);const sd=stdev(cl,20,D.bbM);D.bbU=D.bbM.map((m,i)=>m+2*sd[i]);D.bbL=D.bbM.map((m,i)=>m-2*sd[i]);
+  const bbw=D.bbM.map((m,i)=>(D.bbU[i]-D.bbL[i])/m);D.bbwPct=bbw.map((_,i)=>pctRank(bbw,i,120));
+  D.atrPct=D.atr.map((a,i)=>pctRank(D.atr.map((x,j)=>x/cl[j]),i,200));
+  D.vsma=sma(v,20);
+  // VWAP, reset each UTC day
+  D.vwap=new Array(n).fill(NaN);let pv=0,vv=0,day=-1;
+  for(let i=0;i<n;i++){const d=Math.floor(t[i]/864e5);if(d!==day){day=d;pv=0;vv=0}const tp=(h[i]+l[i]+cl[i])/3;pv+=tp*v[i];vv+=v[i];D.vwap[i]=vv?pv/vv:cl[i]}
+  // Higher timeframe trend, only from HTF candles already closed at this bar's close
+  const H=c.h,hc=H.map(b=>b.c),he21=ema(hc,21),he50=ema(hc,50),hms=HTF_MS[TF[tf].htf],ms=TF[tf].ms;
+  D.htf=new Array(n).fill(0);let k=-1;
+  for(let i=0;i<n;i++){const close=t[i]+ms;while(k+1<H.length&&H[k+1].t+hms<=close)k++;
+    if(k>=50){const x=hc[k];D.htf[i]=(x>he50[k]&&he21[k]>he50[k])?1:(x<he50[k]&&he21[k]<he50[k])?-1:0}}
+  D.ev=new Array(n);for(let i=0;i<n;i++)D.ev[i]=evalBar(D,i);
+  return D}
+
+function evalBar(D,i){if(i<START||!Number.isFinite(D.e200[i])||!Number.isFinite(D.adx[i])||!Number.isFinite(D.atr[i]))return null;
+  const c=D.c[i],e21=D.e21[i],e50=D.e50[i],atr=D.atr[i],adx=D.adx[i],r=D.rsi[i],rp=D.rsi[i-1];
+  const regime=D.atrPct[i]>0.97?"extreme":adx>=25?"trend":adx<20?"range":"mixed";
+  const P={};const note={};
+  // 1. EMA structure
+  P.trend=(c>e21&&e21>e50)?1:(c<e21&&e21<e50)?-1:0.5*Math.sign(e21-e50);
+  note.trend=P.trend===1?"מחיר מעל EMA21 מעל EMA50":P.trend===-1?"מחיר מתחת EMA21 מתחת EMA50":"מבנה מעורב";
+  // 2. HTF trend
+  P.htf=D.htf[i];note.htf=P.htf===1?"מגמה עולה בטווח הגבוה":P.htf===-1?"מגמה יורדת בטווח הגבוה":"אין מגמה ברורה בטווח הגבוה";
+  // 3. MACD momentum
+  const hh=D.hist[i],hp=D.hist[i-1];P.macd=hh>0?(hh>hp?1:0.3):hh<0?(hh<hp?-1:-0.3):0;
+  note.macd=hh>0?(hh>hp?"מומנטום חיובי ומתחזק":"מומנטום חיובי שנחלש"):(hh<hp?"מומנטום שלילי ומתחזק":"מומנטום שלילי שנחלש");
+  // 4. RSI, read according to regime
+  if(regime==="range"){P.rsi=(r<32&&r>rp)?1:(r>68&&r<rp)?-1:0;note.rsi=`RSI ${r.toFixed(0)} · שוק מדשדש: מחפש היפוך מקצוות`}
+  else if(P.trend>0){P.rsi=(r>=40&&r<=62&&r>rp)?1:r>75?-0.4:0.3;note.rsi=`RSI ${r.toFixed(0)} · ${r>75?"קנוי יתר, סיכון לתיקון":r>=40&&r<=62&&r>rp?"חזרה לעלייה אחרי תיקון":"ניטרלי במגמה עולה"}`}
+  else if(P.trend<0){P.rsi=(r>=38&&r<=60&&r<rp)?-1:r<25?0.4:-0.3;note.rsi=`RSI ${r.toFixed(0)} · ${r<25?"מכור יתר, סיכון לקפיצה":r>=38&&r<=60&&r<rp?"חזרה לירידה אחרי תיקון":"ניטרלי במגמה יורדת"}`}
+  else{P.rsi=clip((r-50)/25);note.rsi=`RSI ${r.toFixed(0)}`}
+  // 5. VWAP
+  P.vwap=clip((c-D.vwap[i])/atr);note.vwap=`${c>D.vwap[i]?"מעל":"מתחת"} ל-VWAP היומי ב-${Math.abs((c-D.vwap[i])/atr).toFixed(1)} ATR`;
+  // 6. Volume confirmation
+  const vr=D.v[i]/D.vsma[i];P.vol=vr>1.3?Math.sign(c-D.o[i])*clip((vr-1)/1.5,0,1):0;
+  note.vol=`נפח פי ${Number.isFinite(vr)?vr.toFixed(1):"–"} מהממוצע${vr>1.3?(c>D.o[i]?", קונים דוחפים":", מוכרים דוחפים"):""}`;
+  // 7. Squeeze breakout
+  const sq=D.bbwPct[i-1]<0.2;P.sqz=sq&&c>D.bbU[i]?1:sq&&c<D.bbL[i]?-1:0;
+  note.sqz=P.sqz?(P.sqz>0?"פריצה למעלה מכיווץ תנודתיות":"שבירה למטה מכיווץ תנודתיות"):sq?"תנודתיות מכווצת, ממתין לפריצה":"אין כיווץ";
+  let score=0;for(const k in W)score+=W[k]*P[k];
+  return {score:Math.round(score),P,note,regime,htf:D.htf[i],adx,rsi:r}}
+
+function signalAt(D,i,P){const e=D.ev[i];if(!e)return 0;const d=e.score>=P.th?1:e.score<=-P.th?-1:0;
+  if(!d||e.regime==="extreme")return 0;if(P.htf&&e.htf!==d)return 0;return d}
+function blockReason(D,i,P){const e=D.ev[i];if(!e)return "";const d=Math.sign(e.score);
+  if(Math.abs(e.score)<P.th)return `חסרות ${P.th-Math.abs(e.score)} נקודות לאיתות ${d>=0?"לונג":"שורט"}`;
+  if(e.regime==="extreme")return "תנודתיות קיצונית, איתותים מושהים";
+  if(P.htf&&e.htf!==d)return "הציון חזק אבל הטווח הגבוה לא מאשר את הכיוון";return ""}
+
+/* ============ Backtest ============ */
+function backtest(D,P,from=START,to){const n=D.n,last=n-2;to=to??last;const trades=[];let i=Math.max(from,START+1);
+  while(i<=to){const s=signalAt(D,i,P);
+    if(s&&s!==signalAt(D,i-1,P)&&i+1<n){
+      const entry=D.o[i+1],risk=P.sl*D.atr[i];if(!(risk>0)){i++;continue}
+      const sl=entry-s*risk,tp=entry+s*risk*P.rr,tp1=entry+s*risk;const feeR=(P.fee/100)*2*entry/risk;
+      const tr={dir:s,sig:i,ent:i+1,entry,sl,tp,tp1,risk,feeR,out:"open",R:null,x:null,xi:null,t:D.t[i+1]};
+      for(let j=i+1;j<n;j++){const closed=j<=last;const hitSL=s>0?D.l[j]<=sl:D.h[j]>=sl,hitTP=s>0?D.h[j]>=tp:D.l[j]<=tp;
+        if(hitSL){tr.out="sl";tr.R=-1-feeR;tr.xi=j;tr.x=sl;break}
+        if(hitTP){tr.out="tp";tr.R=P.rr-feeR;tr.xi=j;tr.x=tp;break}
+        if(closed&&j-(i+1)>=P.mb){tr.out="time";tr.x=D.c[j];tr.R=s*(D.c[j]-entry)/risk-feeR;tr.xi=j;break}}
+      trades.push(tr);if(tr.out==="open")break;i=tr.xi+1}
+    else i++}
+  return trades}
+function stats(trades){const c=trades.filter(t=>t.out!=="open");const n=c.length;if(!n)return{n:0};
+  let w=0,gp=0,gl=0,cum=0,peak=0,dd=0;for(const t of c){if(t.R>0){w++;gp+=t.R}else gl+=-t.R;cum+=t.R;peak=Math.max(peak,cum);dd=Math.max(dd,peak-cum)}
+  return{n,wr:w/n,exp:cum/n,pf:gl?gp/gl:Infinity,dd,tot:cum}}
+
+function optimize(D){const first=START+1,last=D.n-2,split=Math.floor(first+(last-first)*0.7);const rows=[];
+  for(const th of [35,40,45,50,55,60,65,70,75])for(const sl of [1,1.5,2])for(const rr of [1,1.5,2,3])for(const htf of [true,false]){
+    const P={...S.P,th,sl,rr,htf};const is=stats(backtest(D,P,first,split));if(is.n<12)continue;rows.push({P,is})}
+  if(!rows.length)return null;rows.sort((a,b)=>b.is.exp-a.is.exp);const best=rows[0];
+  const oos=stats(backtest(D,best.P,split+1,last));return{best,oos,split,tested:rows.length}}
+
+/* ============ Formatting ============ */
+const fp=x=>{if(!Number.isFinite(x))return"–";const d=x>=1000?2:x>=10?2:4;return x.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d})};
+const fR=x=>Number.isFinite(x)?(x>0?"+":"")+x.toFixed(2)+"R":"–";
+const fT=t=>new Date(t).toLocaleString("he-IL",{timeZone:"Asia/Jerusalem",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+const pct=x=>Number.isFinite(x)?(x*100).toFixed(0)+"%":"–";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const regimeHe={trend:"שוק במגמה",range:"שוק מדשדש",mixed:"שוק במעבר",extreme:"תנודתיות קיצונית"};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ============ UI build ============ */
+function buildChrome(){
+  $("assets").innerHTML=ASSETS.map(a=>`<button class="asset" type="button" data-s="${a.s}" aria-pressed="${a.s===S.sym}"><span class="k">${a.k}<span class="flag" id="fl-${a.s}"></span></span><span class="p num" id="pr-${a.s}">…</span><span class="sc" id="sc-${a.s}">${a.n}</span></button>`).join("");
+  $("tfs").innerHTML=Object.keys(TF).map(k=>`<button type="button" data-tf="${k}" aria-pressed="${k===S.tf}">${TF[k].l}</button>`).join("");
+  $("assets").onclick=e=>{const b=e.target.closest(".asset");if(!b)return;S.sym=b.dataset.s;onContext()};
+  $("tfs").onclick=e=>{const b=e.target.closest("button");if(!b)return;S.tf=b.dataset.tf;onContext()};
+  const bind=(id,key,parse)=>{$(id).addEventListener("input",()=>{S.P[key]=parse($(id));saveP();recompute()})};
+  bind("th","th",el=>+el.value);bind("sl","sl",el=>+el.value);bind("rr","rr",el=>+el.value);
+  bind("mb","mb",el=>Math.max(5,+el.value||40));bind("fee","fee",el=>Math.max(0,+el.value||0));bind("htf","htf",el=>el.checked);
+  $("resetBtn").onclick=()=>{S.P={...DEF};saveP();syncControls();$("optBox").hidden=true;recompute()};
+  $("optBtn").onclick=runOpt;
+  $("notifyBtn").onclick=enableNotify;
+  $("clearLog").onclick=()=>{store.set("log",[]);renderLog()};
+  window.addEventListener("resize",()=>{if(S.D){drawChart();drawEq()}});
+}
+function ctxKey(){return S.sym+"|"+S.tf}
+function saveP(){store.set("p."+ctxKey(),S.P)}
+function syncControls(){$("th").value=S.P.th;$("thV").textContent=S.P.th;$("sl").value=String(S.P.sl);$("rr").value=String(S.P.rr);$("mb").value=S.P.mb;$("fee").value=S.P.fee;$("htf").checked=S.P.htf}
+async function onContext(){
+  document.querySelectorAll(".asset").forEach(b=>b.setAttribute("aria-pressed",b.dataset.s===S.sym));
+  document.querySelectorAll("#tfs button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tf===S.tf));
+  S.P={...DEF,...store.get("p."+ctxKey(),{})};syncControls();$("optBox").hidden=true;
+  $("htfLbl").textContent="אישור מגמה מטווח "+HTF_LBL[TF[S.tf].htf];
+  $("vBig").textContent="—";$("vBig").className="big w";$("vSub").textContent="טוען היסטוריה…";
+  await refreshActive(true);scanOthers();
+}
+
+/* ============ Loop ============ */
+async function refreshActive(full){try{const c=await loadAsset(S.sym,S.tf,full);S.D=build(c,S.tf);setStatus(true);recompute();checkAlerts(S.sym,S.D)}
+  catch(e){setStatus(false,e)}}
+async function scanOthers(){for(const a of ASSETS){if(a.s===S.sym)continue;try{const key=a.s+"|"+S.tf;const c=await loadAsset(a.s,S.tf,!S.cache[key]);const D=build(c,S.tf);
+      const P={...DEF,...store.get("p."+key,{})};const tr=backtest(D,P);renderChip(a.s,D,P,tr);checkAlerts(a.s,D,P)}catch(e){}}}
+function setStatus(ok,e){$("dot").className="dot "+(ok?"ok":"bad");$("mark").classList.toggle("live",ok);
+  $("stat").textContent=ok?"חי · עודכן "+new Date().toLocaleTimeString("he-IL",{timeZone:"Asia/Jerusalem"}):"אין חיבור לנתונים";
+  const box=$("errBox");if(ok){box.hidden=true;return}
+  box.hidden=false;box.innerHTML=`<b>לא הצלחתי למשוך נתונים מ-Binance.</b> פתח את הקובץ בדפדפן רגיל (Chrome / Safari) או העלה אותו לאתר כמו Netlify. בתוך תצוגות מקדימות סגורות החיבור החיצוני חסום. <span class="muted small">(${esc(e&&e.message||e)})</span>`}
+setInterval(async()=>{S.tick++;await refreshActive(false);if(S.tick%6===0)scanOthers()},5000);
+
+/* ============ Render ============ */
+function recompute(){const D=S.D;if(!D)return;$("thV").textContent=S.P.th;S.bt=backtest(D,S.P);renderHero();renderParts();renderBT();renderTrades();renderChip(S.sym,D,S.P,S.bt);drawChart();renderLog()}
+
+function renderChip(sym,D,P,tr){const i=D.n-2,e=D.ev[i];$("pr-"+sym).textContent=fp(D.c[D.n-1]);
+  const open=tr.length&&tr[tr.length-1].out==="open"?tr[tr.length-1]:null;
+  const sc=$("sc-"+sym),fl=$("fl-"+sym);if(!e){sc.textContent="–";return}
+  sc.innerHTML=`<span class="num" style="color:${e.score>=0?"var(--long)":"var(--short)"}">${e.score>0?"+":""}${e.score}</span>${open?` · ${open.dir>0?"לונג פעיל":"שורט פעיל"}`:""}`;
+  fl.style.background=open?(open.dir>0?"var(--long)":"var(--short)"):"transparent"}
+
+function renderHero(){const D=S.D,i=D.n-2,e=D.ev[i],cur=D.c[D.n-1];const hero=$("hero");
+  if(!e){$("vSub").textContent="אין מספיק היסטוריה";return}
+  const tr=S.bt,open=tr.length&&tr[tr.length-1].out==="open"?tr[tr.length-1]:null;
+  const fresh=open&&open.sig===i;
+  hero.dataset.dir=open?open.dir:0;
+  const pills=[`<span class="pill ${e.regime==="extreme"?"w":""}">${regimeHe[e.regime]} · ADX ${e.adx.toFixed(0)}</span>`,
+    `<span class="pill ${e.htf>0?"l":e.htf<0?"s":""}">טווח ${HTF_LBL[TF[S.tf].htf]}: ${e.htf>0?"עולה":e.htf<0?"יורד":"ניטרלי"}</span>`];
+  if(fresh)pills.unshift(`<span class="pill new">איתות חדש</span>`);
+  $("pills").innerHTML=pills.join("");
+  const lv=(t,v,cls="")=>`<div class="lv"><span class="t">${t}</span><span class="v num ${cls}">${v}</span></div>`;
+  if(open){const live=open.dir*(cur-open.entry)/open.risk;
+    $("vBig").textContent=open.dir>0?"לונג":"שורט";$("vBig").className="big "+(open.dir>0?"l":"s");
+    $("vSub").innerHTML=`נפתח ${fT(open.t)} · כרגע <span class="num" style="color:${live>=0?"var(--long)":"var(--short)"}">${fR(live)}</span>`;
+    $("levels").innerHTML=lv("כניסה",fp(open.entry))+lv("סטופ",fp(open.sl))+lv("יעד 1 (1R)",fp(open.tp1))+lv(`יעד ${S.P.rr}R`,fp(open.tp));
+  }else{$("vBig").textContent="המתנה";$("vBig").className="big w";$("vSub").textContent=blockReason(D,i,S.P)||"אין איתות על הנר האחרון";
+    const d=e.score>=0?1:-1,risk=S.P.sl*D.atr[i];
+    $("levels").innerHTML=lv("מחיר",fp(cur))+lv("ATR",fp(D.atr[i]))+lv(`סטופ אם ${d>0?"לונג":"שורט"}`,fp(cur-d*risk))+lv(`יעד ${S.P.rr}R`,fp(cur+d*risk*S.P.rr))}
+  const pos=x=>50+x/2;$("needle").style.left=pos(clip(e.score,-100,100))+"%";$("thR").style.left=pos(S.P.th)+"%";$("thL").style.left=pos(-S.P.th)+"%";
+  $("scoreNow").textContent=`ציון ${e.score>0?"+":""}${e.score} · סף ±${S.P.th}`;
+  const d=open?open.dir:(e.score>=0?1:-1),ds=stats(tr.filter(t=>t.dir===d)),all=stats(tr);
+  $("prob").innerHTML=ds.n?`בבדיקה על ההיסטוריה, <b>${ds.n}</b> איתותי ${d>0?"לונג":"שורט"} דומים: <b class="num">${pct(ds.wr)}</b> הגיעו ליעד, תוחלת <b class="num">${fR(ds.exp)}</b> לעסקה. ${ds.exp>0?"":"<span style='color:var(--warn)'>התוחלת שלילית בהגדרות האלה. נסה את כפתור האופטימיזציה או טווח זמן אחר.</span>"}`
+    :`עדיין אין מספיק איתותי ${d>0?"לונג":"שורט"} בהיסטוריה (${all.n||0} עסקאות בסך הכל) כדי להעריך סיכוי.`}
+
+function renderParts(){const D=S.D,e=D.ev[D.n-2];if(!e)return;
+  const names={trend:"מבנה ממוצעים",htf:"מגמת טווח גבוה",macd:"מומנטום MACD",rsi:"RSI",vwap:"מיקום מול VWAP",vol:"נפח מסחר",sqz:"פריצת כיווץ"};
+  $("parts").innerHTML=Object.keys(W).map(k=>{const v=e.P[k],pts=Math.round(W[k]*v),w=Math.abs(v)*50;
+    const bar=v>=0?`<span style="left:50%;width:${w}%;background:var(--long)"></span>`:`<span style="left:${50-w}%;width:${w}%;background:var(--short)"></span>`;
+    return `<div class="part"><span class="nm">${names[k]} <span class="muted small">(${W[k]})</span></span><div class="pbar">${bar}</div><span class="pv num" style="color:${pts>0?"var(--long)":pts<0?"var(--short)":"var(--muted)"}">${pts>0?"+":""}${pts}</span><span class="nt">${esc(e.note[k])}</span></div>`}).join("");
+  $("regimeNote").textContent=e.regime==="range"?"בשוק מדשדש ה-RSI נקרא כמתנד היפוך, ולא כאישור מגמה.":e.regime==="extreme"?"התנודתיות בטופ 3% של 200 הנרות האחרונים. במצב כזה הסטופים נפגעים מרעש, ולכן האיתותים מושהים.":"איתות נוצר רק כשהציון עובר את הסף, הטווח הגבוה מאשר, והתנודתיות לא קיצונית."}
+
+function renderBT(){const D=S.D,s=stats(S.bt);
+  $("btRange").textContent=`${fT(D.t[START])} – ${fT(D.t[D.n-1])}`;
+  const tile=(t,v,col)=>`<div class="tile"><span class="t">${t}</span><span class="v" ${col?`style="color:${col}"`:""}>${v}</span></div>`;
+  $("tiles").innerHTML=s.n?tile("עסקאות",s.n)+tile("אחוז הצלחה",pct(s.wr))+tile("תוחלת לעסקה",fR(s.exp),s.exp>0?"var(--long)":"var(--short)")+tile("Profit Factor",Number.isFinite(s.pf)?s.pf.toFixed(2):"∞")+tile("ירידה מקסימלית",s.dd.toFixed(1)+"R")+tile("סה״כ",fR(s.tot),s.tot>0?"var(--long)":"var(--short)")
+    :`<div class="empty" style="grid-column:1/-1">אין עסקאות בהגדרות האלה. הורד את הסף או בטל את חובת אישור הטווח הגבוה.</div>`;
+  drawEq()}
+
+function renderTrades(){const t=S.bt.slice(-8).reverse();const lbl={tp:"יעד",sl:"סטופ",time:"יציאת זמן",open:"פתוחה"};
+  $("trades").innerHTML=t.length?t.map(x=>`<div class="li"><span>${fT(x.t)} · <span class="muted">${lbl[x.out]}</span></span><span class="pill ${x.dir>0?"l":"s"}">${x.dir>0?"לונג":"שורט"}</span><span class="num" style="color:${x.R>0?"var(--long)":x.R<0?"var(--short)":"var(--muted)"}">${x.out==="open"?"פתוחה":fR(x.R)}</span></div>`).join(""):`<div class="empty">אין עסקאות עדיין.</div>`}
+
+/* ============ Alerts ============ */
+function checkAlerts(sym,D,P){P=P||S.P;const i=D.n-2,s=signalAt(D,i,P);if(!s||s===signalAt(D,i-1,P))return;
+  const id=sym+"|"+D.tf+"|"+D.t[i];const seen=store.get("seen",[]);if(seen.includes(id))return;seen.push(id);store.set("seen",seen.slice(-200));
+  const a=ASSETS.find(x=>x.s===sym),entry=D.c[i],risk=P.sl*D.atr[i];
+  const msg=`${s>0?"לונג":"שורט"} ${a.k} · ${TF[D.tf].l} · כניסה ${fp(entry)} · סטופ ${fp(entry-s*risk)} · יעד ${fp(entry+s*risk*P.rr)}`;
+  const log=store.get("log",[]);log.unshift({t:Date.now(),msg,dir:s,score:D.ev[i].score});store.set("log",log.slice(0,50));renderLog();
+  toast("איתות חדש: "+msg);beep();
+  if(S.notify&&"Notification" in window&&Notification.permission==="granted"){try{new Notification("רדאר איתותים",{body:msg})}catch(e){}}}
+function renderLog(){const l=store.get("log",[]);
+  $("log").innerHTML=l.length?l.slice(0,12).map(x=>`<div class="li"><span>${esc(x.msg)}</span><span class="muted small">${fT(x.t)}</span><span class="pill ${x.dir>0?"l":"s"} num">${x.score>0?"+":""}${x.score}</span></div>`).join("")
+    :`<div class="empty">כשייווצר איתות חדש באחד מ-4 הנכסים על טווח ${TF[S.tf].l}, הוא יופיע כאן עם צליל. השאר את הדף פתוח.</div>`}
+async function enableNotify(){try{S.audio=S.audio||new (window.AudioContext||window.webkitAudioContext)()}catch(e){}
+  S.notify=true;if("Notification" in window){try{await Notification.requestPermission()}catch(e){}}
+  $("notifyBtn").textContent="התראות פעילות";beep();toast("התראות הופעלו. השאר את הלשונית פתוחה.")}
+function beep(){const a=S.audio;if(!a)return;try{const o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.setValueAtTime(.0001,a.currentTime);g.gain.exponentialRampToValueAtTime(.25,a.currentTime+.02);g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+.45);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.5)}catch(e){}}
+let tT;function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(tT);tT=setTimeout(()=>t.hidden=true,6000)}
+
+/* ============ Optimizer ============ */
+function runOpt(){const D=S.D;if(!D)return;const box=$("optBox");box.hidden=false;box.textContent="בודק 216 שילובים…";
+  setTimeout(()=>{const r=optimize(D);if(!r){box.textContent="אין מספיק עסקאות בהיסטוריה של הנכס והטווח הזה כדי לבחור פרמטרים. נסה טווח זמן קצר יותר.";return}
+    const{best,oos}=r;S.P={...best.P};saveP();syncControls();recompute();
+    const row=(n,s)=>`<tr><td>${n}</td><td class="num">${s.n||0}</td><td class="num">${pct(s.wr)}</td><td class="num">${fR(s.exp)}</td><td class="num">${s.n?s.dd.toFixed(1)+"R":"–"}</td></tr>`;
+    const verdict=!oos.n?"אין מספיק עסקאות בתקופת הבחינה כדי לאשר.":oos.exp>0?"<b style='color:var(--long)'>ההגדרות החזיקו גם על נתונים שלא נראו באופטימיזציה.</b> זה סימן טוב, לא הבטחה.":"<b style='color:var(--warn)'>ההגדרות לא החזיקו על נתונים חדשים.</b> סביר שזה התאמת־יתר לעבר. אל תסמוך עליהן.";
+    box.innerHTML=`<div>נבחרו: סף <b class="num">${best.P.th}</b>, סטופ <b class="num">${best.P.sl}</b> ATR, יחס <b class="num">1:${best.P.rr}</b>, אישור טווח גבוה ${best.P.htf?"כן":"לא"}.</div>
+      <div style="overflow-x:auto"><table><tr><th>תקופה</th><th>עסקאות</th><th>הצלחה</th><th>תוחלת</th><th>ירידה</th></tr>${row("למידה (70% הראשונים)",best.is)}${row("בחינה (30% האחרונים)",oos)}</table></div>
+      <div>${verdict}</div>`;drawEq(r.split)},30)}
+
+/* ============ Canvas ============ */
+function prep(cv){const r=cv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;cv.width=Math.round(r.width*dpr);cv.height=Math.round(r.height*dpr);const x=cv.getContext("2d");x.setTransform(dpr,0,0,dpr,0,0);return{x,w:r.width,h:r.height}}
+function drawChart(){const D=S.D;if(!D)return;const{x,w,h}=prep($("chart"));const padR=64,padT=10,padB=22;
+  const N=Math.max(40,Math.min(140,Math.floor((w-padR)/6))),s0=Math.max(0,D.n-N),idx=[];for(let i=s0;i<D.n;i++)idx.push(i);
+  const open=S.bt.length&&S.bt[S.bt.length-1].out==="open"?S.bt[S.bt.length-1]:null;
+  let lo=Infinity,hi=-Infinity;for(const i of idx){lo=Math.min(lo,D.l[i],D.bbL[i]);hi=Math.max(hi,D.h[i],D.bbU[i])}
+  if(open){lo=Math.min(lo,open.sl,open.tp);hi=Math.max(hi,open.sl,open.tp)}const pad=(hi-lo)*.06;lo-=pad;hi+=pad;
+  const cw=(w-padR)/idx.length,X=k=>k*cw+cw/2,Y=p=>padT+(hi-p)/(hi-lo)*(h-padT-padB);
+  const C={fg:css("--fg"),mu:css("--muted"),ln:css("--line"),lg:css("--long"),sh:css("--short"),gd:css("--gold"),bg:css("--bg")};
+  x.fillStyle=C.bg;x.fillRect(0,0,w,h);x.font="11px "+css("--f-num");x.textBaseline="middle";
+  for(let g=0;g<=4;g++){const p=lo+(hi-lo)*g/4,y=Y(p);x.strokeStyle=C.ln;x.lineWidth=1;x.beginPath();x.moveTo(0,y);x.lineTo(w-padR,y);x.stroke();x.fillStyle=C.mu;x.fillText(fp(p),w-padR+6,y)}
+  // time labels
+  x.fillStyle=C.mu;x.textBaseline="alphabetic";for(let k=0;k<idx.length;k+=Math.ceil(idx.length/4)){x.fillText(new Date(D.t[idx[k]]).toLocaleTimeString("he-IL",{timeZone:"Asia/Jerusalem",hour:"2-digit",minute:"2-digit"}),X(k)-14,h-6)}
+  // bollinger band
+  x.beginPath();idx.forEach((i,k)=>{const y=Y(D.bbU[i]);k?x.lineTo(X(k),y):x.moveTo(X(k),y)});for(let k=idx.length-1;k>=0;k--)x.lineTo(X(k),Y(D.bbL[idx[k]]));x.closePath();x.fillStyle="rgba(140,149,170,.08)";x.fill();
+  const line=(arr,col,wd)=>{x.beginPath();let st=false;idx.forEach((i,k)=>{if(!Number.isFinite(arr[i]))return;const y=Y(arr[i]);st?x.lineTo(X(k),y):(x.moveTo(X(k),y),st=true)});x.strokeStyle=col;x.lineWidth=wd;x.stroke()};
+  line(D.bbU,"rgba(140,149,170,.35)",1);line(D.bbL,"rgba(140,149,170,.35)",1);
+  // candles
+  idx.forEach((i,k)=>{const up=D.c[i]>=D.o[i],col=up?C.lg:C.sh,cx=X(k);x.strokeStyle=col;x.fillStyle=col;x.lineWidth=1;
+    x.beginPath();x.moveTo(cx,Y(D.h[i]));x.lineTo(cx,Y(D.l[i]));x.stroke();const bw=Math.max(1,cw*.62),y1=Y(Math.max(D.o[i],D.c[i])),y2=Y(Math.min(D.o[i],D.c[i]));
+    if(i===D.n-1)x.globalAlpha=.55;x.fillRect(cx-bw/2,y1,bw,Math.max(1,y2-y1));x.globalAlpha=1});
+  line(D.e50,"#6d8fd6",1.4);line(D.e21,C.gd,1.6);
+  // signal markers
+  for(const t of S.bt){if(t.sig<s0)continue;const k=t.sig-s0,cx=X(k);const y=t.dir>0?Y(D.l[t.sig])+10:Y(D.h[t.sig])-10;
+    x.fillStyle=t.dir>0?C.lg:C.sh;x.beginPath();if(t.dir>0){x.moveTo(cx,y-5);x.lineTo(cx-5,y+4);x.lineTo(cx+5,y+4)}else{x.moveTo(cx,y+5);x.lineTo(cx-5,y-4);x.lineTo(cx+5,y-4)}x.closePath();x.fill()}
+  // levels
+  const hl=(p,col,lab,dash)=>{const y=Y(p);x.setLineDash(dash?[5,4]:[]);x.strokeStyle=col;x.lineWidth=1;x.beginPath();x.moveTo(0,y);x.lineTo(w-padR,y);x.stroke();x.setLineDash([]);
+    x.fillStyle=col;x.fillRect(w-padR,y-9,padR,18);x.fillStyle=C.bg;x.textBaseline="middle";x.font="600 10px "+css("--f-num");x.fillText(lab||fp(p),w-padR+4,y);x.font="11px "+css("--f-num")};
+  if(open){hl(open.sl,C.sh,"SL "+fp(open.sl),true);hl(open.tp,C.lg,"TP "+fp(open.tp),true);hl(open.entry,C.mu,"IN "+fp(open.entry),true)}
+  hl(D.c[D.n-1],C.gd)}
+function drawEq(split){const cv=$("eq");if(!cv||!S.bt)return;const{x,w,h}=prep(cv);const c=S.bt.filter(t=>t.out!=="open");
+  x.fillStyle=css("--bg");x.fillRect(0,0,w,h);x.font="11px "+css("--f-num");if(!c.length)return;
+  const pts=[0];let cum=0;for(const t of c){cum+=t.R;pts.push(cum)}const lo=Math.min(0,...pts),hi=Math.max(0,...pts),rg=(hi-lo)||1,pd=14;
+  const X=k=>pd+k/(pts.length-1||1)*(w-pd*2-36),Y=v=>pd+(hi-v)/rg*(h-pd*2);
+  x.strokeStyle=css("--line");x.beginPath();x.moveTo(pd,Y(0));x.lineTo(w-pd-36,Y(0));x.stroke();x.fillStyle=css("--muted");x.textBaseline="middle";x.fillText("0R",w-pd-30,Y(0));
+  x.fillText(fR(cum),w-pd-36+4,Y(cum)<16?16:Y(cum));
+  if(split){const k=c.findIndex(t=>t.ent>split);if(k>0){const sx=X(k);x.setLineDash([4,4]);x.strokeStyle=css("--gold");x.beginPath();x.moveTo(sx,pd);x.lineTo(sx,h-pd);x.stroke();x.setLineDash([]);x.fillStyle=css("--gold");x.fillText("בחינה ←",sx+4,pd+4)}}
+  const col=cum>=0?css("--long"):css("--short");x.beginPath();pts.forEach((v,k)=>k?x.lineTo(X(k),Y(v)):x.moveTo(X(k),Y(v)));
+  x.lineTo(X(pts.length-1),Y(0));x.lineTo(X(0),Y(0));x.closePath();x.fillStyle=cum>=0?css("--long-soft"):css("--short-soft");x.fill();
+  x.beginPath();pts.forEach((v,k)=>k?x.lineTo(X(k),Y(v)):x.moveTo(X(k),Y(v)));x.strokeStyle=col;x.lineWidth=2;x.stroke();
+  x.fillStyle=col;x.beginPath();x.arc(X(pts.length-1),Y(cum),3.5,0,7);x.fill()}
+
+/* ============ Boot ============ */
+buildChrome();renderLog();onContext();
+</script>
+</body>
+</html>

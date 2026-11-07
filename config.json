@@ -1,0 +1,12 @@
+{
+  "siteUrl": "",
+  "assets": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "PAXGUSDT"],
+  "timeframes": ["15m", "1h"],
+  "params": { "th": 55, "sl": 1.5, "rr": 2, "mb": 40, "fee": 0.1, "htf": true },
+  "overrides": {},
+  "onlyPositiveEdge": true,
+  "minHistoryTrades": 8,
+  "lookbackCandles": 3,
+  "maxAgeMinutes": 30,
+  "loopScanSeconds": 60
+}
